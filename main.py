@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 from concurrent.futures import ThreadPoolExecutor
-import time, os
-import http.client
-import requests
+import time, os, http.client
 
 def main():
     MAX_WORKERS = 50 # none means cpu-cores * 5
