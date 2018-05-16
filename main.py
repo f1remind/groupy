@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 from concurrent.futures import ThreadPoolExecutor
+from socket import gaierror, gethostbyname
 import time, os, http.client
 
 def main():
-    MAX_WORKERS = 50 # none means cpu-cores * 5
+    MAX_WORKERS = 250 # none means cpu-cores * 5
     QUEUE_FILE = 'queue.txt'
     OUTPUT_FILE = 'output.txt'
     STATEFILE = 'processed.txt'
@@ -23,18 +24,23 @@ def main():
     if not os.path.exists(OUTPUT_FILE):
         open(OUTPUT_FILE, 'w').close()
 
-    # Load processed targets into a list
-    with open(STATEFILE) as f:
-        processed = [l.strip() for l in f.readlines()]
 
     # Load targets into a list
     print(time.ctime(), "Checking if links have been resolved before..") # Switch to real db soon
     with open(QUEUE_FILE) as f:
         for l in f.readlines():
             l = l.strip()
-            if not l or l in processed:
-                continue
-            targets.append(l)
+            if l:
+                targets.append(l)
+
+    # Load processed targets into a list
+    with open(STATEFILE) as f:
+        for line in f.readlines():
+            line = line.strip()
+            while line in targets:
+                targets.remove(line)
+
+
     print(time.ctime(), "Done, starting scraper")
 
     targetsize = sum([sum([len(e) for e in entry]) for entry in targets])
@@ -63,12 +69,17 @@ def main():
     print(time.ctime(), "Finished {} Elements in {:.2f}s".format(len(targets), end-start))
 
 def work(target, use_requests=False):
-    conn = http.client.HTTPConnection(target[0])
-    conn.request("HEAD", "/a/{}/forum/".format(target[1]))
-    res = conn.getresponse()
-    res = res.getheader('Content-Length')
-    if not res:
-        res = '0'
+    res = None
+    while res is None:
+        try:
+            conn = http.client.HTTPConnection(target[0])
+            conn.request("HEAD", "/a/{}/forum/".format(target[1]))
+            res = conn.getresponse()
+            res = res.getheader('Content-Length')
+            if not res:
+                res = '0'
+        except gaierror:
+            print("Retrying", target[0] + ' with /a/' + target[1] + '/forum/')
     return target, res
 
 def update(text, filename):
