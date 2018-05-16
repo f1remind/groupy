@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from concurrent.futures import ThreadPoolExecutor
 from socket import gaierror, gethostbyname
-import time, os, http.client
+import yaml, json, time, os, http.client
+
 
 def main():
     MAX_WORKERS = 250 # none means cpu-cores * 5
@@ -86,6 +87,44 @@ def update(text, filename):
     with open(filename, 'a') as f:
         f.write(text)
 
+def get_groups(host):
+    # Not too sure about these headers, but they work
+    headers = {
+        'Host': 'groups.google.com',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:52.0) Gecko/20100101 Firefox/52.0',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Content-Type': 'text/x-gwt-rpc; charset=utf-8',
+        'X-Groups-Time-Zone': '4402827_48_52_123900_48_436380',
+        'X-GWT-Permutation': '5D5151DBCAFD1C0ED54B504BC5CC86D2',
+        'X-GWT-Module-Base': 'https://groups.google.com/forum/',
+        'Connection': 'keep-alive',
+        'Pragma': 'no-cache',
+        'Cache-Control': 'no-cache',
+    }
+
+    # Setup connection to groups.google.com
+    conn = http.client.HTTPSConnection('groups.google.com')
+
+    # Get the xsrf from the base site
+    xsrfurl = 'https://groups.google.com/a/{}/forum/#!forumsearch/'.format(host)
+    conn.request('GET', xsrfurl)
+    response = conn.getresponse().read().decode('UTF-8')
+    xsrf = response.split('xsrf-token":"')[1].split('"')[0]
+
+    # Add the xsrf into the data
+    # no idea what any of these fields mean, except the xsrf, but it works
+    data='7|3|10|https://groups.google.com/forum/|D2FD55322ACD18E1E5E0D2074EB623A5|5m|{}|_|getMatchingForums|5t|4l|I|59|1|2|3|4|5|6|6|7|8|8|7|9|9|0|10|0|-2|0|0|20|'.format(
+        xsrf
+    )
+
+    # Request the yaml-encoded data and decode it
+    conn.request('POST', 'https://groups.google.com/a/{}/forum/fsearch?appversion=1&hl=en&authuser=0'.format(host), body=data, headers=headers)
+    response = conn.getresponse().read().decode('utf-8')[4:]
+    response = yaml.safe_load(response)
+
+    # Again, no idea what the other fields except for the third-last one mean
+    return response, response[-3]
 
 if __name__ == '__main__':
     main()
